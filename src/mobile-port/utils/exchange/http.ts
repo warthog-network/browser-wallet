@@ -71,6 +71,20 @@ export async function requestJson(url: string, init: RequestInit): Promise<unkno
   return body;
 }
 
+/** Plain reason when Brave will not start the IPv4 forwarder. */
+export function explainForwarderFailure(message: string): string {
+  if (/forbidden|disabled by the system/i.test(message)) {
+    return 'Brave has the IPv4 forwarder installed and refused this extension. Add this extension id to the host allowlist.';
+  }
+  if (/not found|can.?t find|cannot find|not the binary/i.test(message)) {
+    return 'This browser has no SafeTrade IPv4 forwarder registered. Installing or removing the extension does not register it.';
+  }
+  if (/failed to start|communicating|has exited|failed to launch/i.test(message)) {
+    return 'Brave found the IPv4 forwarder and could not run it.';
+  }
+  return message || 'The SafeTrade IPv4 forwarder is not connected.';
+}
+
 /** Turn a failed SafeTrade call into the sentence the Tools panel shows. */
 export function explainExchangeFailure(err: unknown): string {
   if (err instanceof ExchangeError) {
@@ -81,8 +95,8 @@ export function explainExchangeFailure(err: unknown): string {
     if (/untrusted_ip|unauthorized ip|ip address|not trusted|whitelist/i.test(base)) {
       return 'SafeTrade accepted the key and rejected the address it saw. Trust this computer’s public IPv4 on that API key. SafeTrade cannot store an IPv6 address, and a phone on cellular data uses a different address.';
     }
-    if (/native messaging host/i.test(base)) {
-      return 'The SafeTrade IPv4 forwarder is not connected. Reload the extension, then try again.';
+    if (/native messaging/i.test(base)) {
+      return explainForwarderFailure(base);
     }
     if (err.status === 401 || err.status === 403) {
       return `${base} The request reached SafeTrade. A wrong key or secret, or an address that is listed but not trusted, both look like this.`;
