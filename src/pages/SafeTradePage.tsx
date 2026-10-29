@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import safetradeMark from "../assets/safetrade-favicon.png";
 import { Address, NonceId, RoundedFee, Wart, type TransactionJson } from "warthog-ts";
+import ForwarderCard from "../components/ForwarderCard";
 import Header from "../components/Header";
 import NetworkBadge from "../components/chains/NetworkBadge";
 import SpendConfirm, { useSpendFlow } from "../components/SpendConfirm";
@@ -808,6 +809,7 @@ export default function SafeTradePage() {
         Checks the WART/USDT account on safe.trade. The key stays in this browser.
         SafeTrade accepts the call only from a trusted IPv4.
       </p>
+      <ForwarderCard />
       {!mainnetNode ? (
         <div className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2">
           <NodeError

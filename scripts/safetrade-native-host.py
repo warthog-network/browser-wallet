@@ -92,6 +92,8 @@ def auth_headers(message):
 
 
 def handle(message):
+    if message.get("op") == "ping":
+        return {"ok": True, "ipv4": True}
     method = message.get("method") or "GET"
     if method not in ("GET", "POST"):
         return {"error": "The SafeTrade forwarder rejected this request."}

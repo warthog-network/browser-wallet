@@ -42,6 +42,11 @@ jobs:
           cd build-firefox
           zip -r -FS ../warthog_extension_firefox.zip * --exclude '*.git*'
 
+      - name: Build IPv4 forwarder AppImage
+        run: |
+          chmod +x scripts/build-forwarder-appimage.sh
+          ./scripts/build-forwarder-appimage.sh dist
+
       - name: sign the extension
         continue-on-error: true
         uses: cardinalby/webext-buildtools-firefox-sign-xpi-action@v1
@@ -63,4 +68,5 @@ jobs:
             warthog_extension.zip
             warthog_extension_firefox.zip
             warthog_extension_firefox.xpi
+            dist/Warthog_IPv4_forwarder-x86_64.AppImage
 
