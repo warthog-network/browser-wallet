@@ -2,18 +2,29 @@
 """SafeTrade native host. Signed extension calls leave with curl -4.
 
 SafeTrade can store an IPv4 allowlist entry and cannot store an IPv6 address.
-This machine's default route to safe.trade is IPv6, and the browser cannot
-choose the family. The host is started by the extension and speaks one
-native-messaging message on stdin/stdout.
+The browser cannot choose the address family. The host is started by the
+extension and speaks one native-messaging message on stdin/stdout.
 """
 
 import json
+import os
 import re
+import shutil
 import struct
 import subprocess
 import sys
 
-CURL = "/usr/bin/curl"
+
+def find_curl():
+    """Linux keeps the system curl. Windows uses curl.exe on PATH."""
+    if sys.platform == "win32":
+        return shutil.which("curl.exe") or shutil.which("curl")
+    if os.path.isfile("/usr/bin/curl"):
+        return "/usr/bin/curl"
+    return shutil.which("curl")
+
+
+CURL = find_curl()
 ORIGIN = "https://safe.trade/api/v2"
 MAX_BODY = 16384
 MAX_OUT = 900_000
@@ -116,6 +127,9 @@ def handle(message):
     except ValueError:
         return {"error": "The SafeTrade forwarder rejected this request."}
 
+    if not CURL:
+        return {"error": "The SafeTrade IPv4 forwarder needs curl installed on this computer."}
+
     args = [
         CURL,
         "-sS",
@@ -132,6 +146,8 @@ def handle(message):
     for name, value in headers:
         args += ["-H", f"{name}: {value}"]
     args += ["-w", f"{MARKER}%{{http_code}}__", f"{ORIGIN}{path}{search}"]
+    # A console window on Windows would flash over the browser for every call.
+    launch = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
     try:
         # Never inherit the native-messaging stdin. Chrome keeps it open, and
         # curl would block on it.
@@ -142,6 +158,7 @@ def handle(message):
                 capture_output=True,
                 timeout=30,
                 check=False,
+                **launch,
             )
         else:
             proc = subprocess.run(
@@ -150,6 +167,7 @@ def handle(message):
                 capture_output=True,
                 timeout=30,
                 check=False,
+                **launch,
             )
     except (OSError, subprocess.TimeoutExpired):
         return {"error": "The SafeTrade IPv4 forwarder could not reach SafeTrade."}
@@ -168,6 +186,12 @@ def handle(message):
 
 
 def main():
+    if sys.platform == "win32":
+        import msvcrt
+
+        # Text mode rewrites newline bytes and breaks native-message framing.
+        msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+        msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
     try:
         reply = handle(read_message())
     except Exception:

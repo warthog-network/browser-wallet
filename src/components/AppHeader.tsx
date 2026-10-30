@@ -170,10 +170,10 @@ export default function AppHeader() {
           }}
           items={networkItems}
         />
-        <button className="wallet-address-copy" disabled={!address} title={address || "Loading address"} aria-label="Copy address" onClick={() => {
+        <button className="wallet-address-copy" disabled={busy || !address} title={address || "Loading address"} aria-label="Copy address" onClick={() => {
           void navigator.clipboard.writeText(address).then(() => toast.success("Address copied", network.label)).catch(() => toast.error("Copy failed", "Try again"));
         }}><span>{address ? `${address.slice(0, 5)}…${address.slice(-4)}` : "…"}</span><IoCopyOutline /></button>
-        <button className="wallet-icon-button" aria-label="Receive, show QR code" title="Receive" onClick={() => navigate("/receive")}><IoQrCodeOutline /></button>
+        <button className="wallet-icon-button" disabled={busy || !address} aria-label="Receive, show QR code" title="Receive" onClick={() => navigate("/receive")}><IoQrCodeOutline /></button>
       </div>
     </header>
   );

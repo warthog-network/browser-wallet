@@ -248,7 +248,7 @@ const Home: React.FC<{ view?: "wallet" | "activity" }> = ({ view = "wallet" }) =
     nodeError,
     selectedNode,
   } = useWallet();
-  const { accounts, chains, chain, phrasePending, network, setNetwork, address } = useChainAccounts();
+  const { accounts, chains, chain, phrasePending, addressError, network, setNetwork, address } = useChainAccounts();
   const navigate = useNavigate();
   const [balance, setBalance] = useState(0);
   const [balanceError, setBalanceError] = useState<string | null>(null);
@@ -864,7 +864,8 @@ const Home: React.FC<{ view?: "wallet" | "activity" }> = ({ view = "wallet" }) =
       </div>}
 
       <div className="mt-4">
-        {view === "activity" && chain !== "wart" && accounts ? <ChainActivity chain={chain} address={address} ethAddress={accounts.ethAddress} btcAddress={accounts.btcAddress} solAddress={accounts.solAddress} />
+        {chain !== "wart" && !accounts ? <p role={addressError ? "alert" : "status"}>{addressError || "Loading account addresses…"}</p>
+          : view === "activity" && chain !== "wart" && accounts ? <ChainActivity chain={chain} address={address} ethAddress={accounts.ethAddress} btcAddress={accounts.btcAddress} solAddress={accounts.solAddress} />
           : showOrders ? <OpenOrders /> : renderTabContent()}
       </div>
 

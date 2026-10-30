@@ -29,9 +29,15 @@ function readChain(): BrowserChain {
 }
 
 export function useChainAccounts(syncSession = false) {
-  const { canAddAccounts, signingUnlocked, selectedWalletIndex, wallet, activeNetwork, setActiveNetwork } = useWallet();
-  const [accounts, setAccounts] = useState<ChainAccounts | null>(null);
-  const [settled, setSettled] = useState(false);
+  const { canAddAccounts, signingUnlocked, selectedWalletIndex, wallet, token, activeNetwork, setActiveNetwork } = useWallet();
+  const accountKey = signingUnlocked && canAddAccounts && wallet
+    ? JSON.stringify([token, wallet, selectedWalletIndex]) : null;
+  const [result, setResult] = useState<{ key: string; accounts: ChainAccounts | null; error: string | null } | null>(null);
+  // Effects run after render. Bind every result to its account/session so the
+  // first render after a switch cannot expose the previous account's address.
+  const current = accountKey && result?.key === accountKey ? result : null;
+  const accounts = current?.accounts ?? null;
+  const addressError = current?.error ?? null;
 
   useEffect(() => {
     if (!syncSession) return;
@@ -39,36 +45,30 @@ export function useChainAccounts(syncSession = false) {
   }, [syncSession, signingUnlocked, selectedWalletIndex]);
 
   useEffect(() => {
-    if (!signingUnlocked || !canAddAccounts) {
-      setAccounts(null);
-      setSettled(true);
+    if (!accountKey) {
+      setResult(null);
       return;
     }
     let alive = true;
-    setSettled(false);
     void (async () => {
       try {
         const pubs = await chainPublicFromWorker(selectedWalletIndex);
+        if (!pubs) throw new Error("No public addresses returned");
         if (!alive) return;
-        setAccounts(pubs ? {
-          ethAddress: pubs.ethAddress,
-          btcAddress: pubs.btcAddress,
-          solAddress: pubs.solAddress,
-        } : null);
+        setResult({ key: accountKey, error: null, accounts: {
+          ethAddress: pubs.ethAddress, btcAddress: pubs.btcAddress, solAddress: pubs.solAddress,
+        } });
       } catch {
-        if (alive) setAccounts(null);
-      } finally {
-        if (alive) setSettled(true);
+        if (alive) setResult({ key: accountKey, accounts: null, error: "Could not load this account's addresses. Lock and unlock the wallet to try again." });
       }
     })();
     return () => {
       alive = false;
     };
-  }, [signingUnlocked, canAddAccounts, selectedWalletIndex, wallet]);
+  }, [accountKey, selectedWalletIndex]);
 
-  const chains: BrowserChain[] = accounts
-    ? ["wart", "ethereum", "bitcoin", "hemi", "solana"]
-    : ["wart"];
+  // Network availability depends on the wallet type, not request timing.
+  const chains: BrowserChain[] = accountKey ? ORDER : ["wart"];
 
   const [chain, setChainState] = useState<BrowserChain>(readChain);
 
@@ -99,6 +99,6 @@ export function useChainAccounts(syncSession = false) {
   };
   const address = active === "wart" ? wallet || "" : active === "bitcoin"
     ? accounts?.btcAddress || "" : active === "solana" ? accounts?.solAddress || "" : accounts?.ethAddress || "";
-  const phrasePending = Boolean(signingUnlocked && canAddAccounts && !settled);
-  return { accounts, chains, chain: active, setChain, phrasePending, network, networks, setNetwork, address };
+  const phrasePending = Boolean(accountKey && !current);
+  return { accounts, chains, chain: active, setChain, phrasePending, addressError, network, networks, setNetwork, address };
 }

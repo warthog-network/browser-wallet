@@ -8,9 +8,9 @@ import { isPasskeyHandedOff } from "../utils/passkeyHandoff";
 import { clearPasskeyWaiting, paintPasskeyWaiting } from "../utils/passkeyUi";
 
 export default function AccountDetails() {
-  const { name, nameList, selectedWalletIndex, setName, setNameList, password, pathType, ledgerAccount, saveCurrentAsNamedWallet, enablePasskeyOnCurrentWallet } = useWallet();
+  const { name, savedWalletName, nameList, selectedWalletIndex, setName, setNameList, password, pathType, ledgerAccount, saveCurrentAsNamedWallet, enablePasskeyOnCurrentWallet } = useWallet();
   const [accountName, setAccountName] = useState(name || "");
-  const [saveName, setSaveName] = useState(name || "My Wallet");
+  const [saveName, setSaveName] = useState(savedWalletName || name || "My Wallet");
   const [backupPassword, setBackupPassword] = useState("");
   const [twoFactor, setTwoFactor] = useState(false);
   const [busy, setBusy] = useState(false);

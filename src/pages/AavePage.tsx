@@ -104,7 +104,7 @@ function healthBadge(wad: bigint | null): { label: string; cls: string } {
 }
 
 export default function AavePage() {
-  const { accounts } = useChainAccounts();
+  const { accounts, phrasePending, addressError } = useChainAccounts();
   const flow = useSpendFlow();
   const owner = accounts?.ethAddress || "";
 
@@ -404,8 +404,8 @@ export default function AavePage() {
           </button>
         </div>
         {!owner ? (
-          <p className="text-sm text-white/70">
-            This wallet has no Ethereum account. Aave needs the account derived from the recovery phrase or an added Nano Ethereum account.
+          <p className="text-sm text-white/70" role={addressError ? "alert" : "status"}>
+            {phrasePending ? "Loading account addresses…" : addressError || "This wallet has no Ethereum account. Aave needs the account derived from the recovery phrase or an added Nano Ethereum account."}
           </p>
         ) : loadError ? (
           <div className="space-y-2 rounded-lg border border-red-400/30 bg-red-400/10 p-3">

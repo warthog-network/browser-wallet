@@ -47,6 +47,13 @@ jobs:
           chmod +x scripts/build-forwarder-appimage.sh
           ./scripts/build-forwarder-appimage.sh dist
 
+      - name: Pack Windows IPv4 forwarder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64 zip
+          chmod +x scripts/build-forwarder-windows.sh
+          ./scripts/build-forwarder-windows.sh dist
+
       - name: sign the extension
         continue-on-error: true
         uses: cardinalby/webext-buildtools-firefox-sign-xpi-action@v1
@@ -69,4 +76,5 @@ jobs:
             warthog_extension_firefox.zip
             warthog_extension_firefox.xpi
             dist/Warthog_IPv4_forwarder-x86_64.AppImage
+            dist/Warthog_IPv4_forwarder-windows.zip
 

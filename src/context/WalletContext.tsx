@@ -111,6 +111,8 @@ interface WalletContextProps {
   selectedNodeIndex: number;
   password: string | null;
   name: string | null;
+  /** Named save used to authenticate this session, independent of account labels. */
+  savedWalletName: string | null;
   pathType: PathType;
   tmpDestinationWallet: string | null;
   tmpAssetHash: string | null;
@@ -241,7 +243,7 @@ interface WalletContextProps {
   }) => Promise<boolean>;
   activateKeyMaterial: (
     data: WalletKeyMaterial,
-    opts?: { password?: string; name?: string },
+    opts?: { password?: string; name?: string; savedWalletName?: string | null },
   ) => Promise<void>;
   setWalletListState: (walletList: string[]) => void;
   setNodeListState: (nodeList: WalletNode[]) => void;
@@ -280,6 +282,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
   const [wallet, setWalletState] = useState<string | null>(null);
   const [password, setPasswordState] = useState<string | null>(null);
   const [name, setNameState] = useState<string | null>(null);
+  const [savedWalletName, setSavedWalletName] = useState<string | null>(null);
   const [pathType, setPathTypeState] = useState<PathType>("hardened");
   const [walletList, setWalletListState] = useState<string[]>([]);
   const [selectedWalletIndex, setSelectedWalletIndexState] =
@@ -309,6 +312,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
     pathType?: PathType;
     password: string | null;
     name: string;
+    savedWalletName?: string | null;
   } | null>(null);
   const [hasMnemonic, setHasMnemonic] = useState(false);
   const accountRootRef = useRef<string | null>(null);
@@ -568,7 +572,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
   /** Apply key material into session + storage (used by create / import / login). */
   const activateKeyMaterial = async (
     data: WalletKeyMaterial,
-    opts?: { password?: string; name?: string },
+    opts?: { password?: string; name?: string; savedWalletName?: string | null },
   ): Promise<void> => {
     const accountName = opts?.name || "Account 0";
     // Scope public account preferences to the seed's first address, never to
@@ -620,10 +624,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
     setSelectedWalletIndexState(selected);
     setSessionAccountIndex(selected);
     setNameState(names[selected]);
+    setSavedWalletName(opts?.savedWalletName || null);
     setPathTypeState(restoredPath);
-    if (opts?.password) {
-      setPasswordState(opts.password);
-    }
+    setPasswordState(opts?.password || null);
     if (sessionToken) {
       setTokenState(sessionToken);
     }
@@ -661,6 +664,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
         address: data.address,
         mnemonic: data.mnemonic,
       });
+      setSavedWalletName(null);
+      setPasswordState(null);
       setSigningUnlocked(true);
       setHasMnemonic(Boolean(data.mnemonic));
       // Seed stays in React only while the recovery screens are showing it.
@@ -735,6 +740,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
       address: data.address,
       mnemonic: data.mnemonic,
     });
+    setSavedWalletName(null);
+    setPasswordState(null);
     setSigningUnlocked(true);
     setHasMnemonic(true);
     setSeedPhrase(data.mnemonic || null);
@@ -778,6 +785,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
   ] as const;
 
   const lockSession = async (): Promise<void> => {
+    setSavedWalletName(null);
+    toolbarUnlockRef.current = null;
     setSessionAccountIndex(0);
     setSeedPhraseState(null);
     setPrivateKeyState(null);
@@ -832,6 +841,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
     } catch {
       /* a hardware session has no key in the worker */
     }
+    setSavedWalletName(null);
     setSeedPhraseState(null);
     setPrivateKeyState(null);
     setHasMnemonic(false);
@@ -870,6 +880,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
       publicKey: data.publicKey,
       address: data.address,
     });
+    setSavedWalletName(null);
+    setPasswordState(null);
     setSigningUnlocked(true);
     setLedgerAccount(null);
     void clearLedgerSession();
@@ -926,6 +938,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
     await activateKeyMaterial(material, {
       password: pwd,
       name: walletName || "Account 0",
+      savedWalletName: walletName,
     });
   };
 
@@ -982,6 +995,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
     await activateKeyMaterial(material, {
       password: pwd || undefined,
       name: walletName || "Account 0",
+      savedWalletName: walletName,
     });
     toolbarUnlockRef.current = {
       privateKey: decrypted.privateKey,
@@ -991,6 +1005,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
       pathType: decrypted.pathType,
       password: pwd || null,
       name: walletName || "Account 0",
+      savedWalletName: walletName,
     };
   };
 
@@ -1059,6 +1074,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
         envelope.require2fa = true;
       }
       await saveNamedWallet(trimmed, serializeEnvelope(envelope));
+      setSavedWalletName(trimmed);
       return;
     }
 
@@ -1072,6 +1088,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
       } else {
         await saveNamedWallet(trimmed, cipher);
       }
+      setSavedWalletName(trimmed);
     }
   };
 
@@ -1129,7 +1146,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
         mnemonic: payload.mnemonic,
         pathType: payload.pathType,
       },
-      { password: pwd || undefined, name: trimmed },
+      { password: pwd || undefined, name: trimmed, savedWalletName: trimmed },
     );
     toolbarUnlockRef.current = {
       privateKey: payload.privateKey,
@@ -1139,6 +1156,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
       pathType: payload.pathType,
       password: pwd,
       name: trimmed,
+      savedWalletName: trimmed,
     };
     await clearPasskeyJob();
   };
@@ -1168,7 +1186,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
       throw new Error("Unlock your wallet first, then enable passkey");
     }
     const tag =
-      String(opts?.name || name || "").trim() || "Main";
+      String(opts?.name || savedWalletName || name || "").trim() || "Main";
     await saveCurrentAsNamedWallet(tag, opts?.password ?? password, {
       withPasskey: true,
       require2fa: Boolean(opts?.require2fa),
@@ -1179,6 +1197,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const clearWalletData = (): void => {
+    setSavedWalletName(null);
     setSeedPhraseState(null);
     setPrivateKeyState(null);
     setLedgerAccount(null);
@@ -1225,7 +1244,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
               mnemonic: pending.mnemonic,
               pathType: pending.pathType,
             },
-            { password: pending.password || undefined, name: pending.name },
+            { password: pending.password || undefined, name: pending.name, savedWalletName: pending.savedWalletName },
           );
           await clearToolbarUnlock();
           return;
@@ -1552,6 +1571,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
         wallet,
         password,
         name,
+        savedWalletName,
         pathType,
         token,
         walletList,

@@ -130,6 +130,7 @@ export type ToolbarUnlock = {
   pathType?: "hardened" | "non-hardened";
   password: string | null;
   name: string;
+  savedWalletName?: string | null;
 };
 
 export async function storeToolbarUnlock(

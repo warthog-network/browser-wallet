@@ -33,6 +33,7 @@ function ShowPrivateKey() {
   const {
     password,
     name,
+    savedWalletName,
     signingUnlocked,
     wallet,
     pathType,
@@ -54,7 +55,7 @@ function ShowPrivateKey() {
     let alive = true;
     setAuthReady(false);
     (async () => {
-      if (!name) {
+      if (!savedWalletName) {
         if (!alive) return;
         setSavedBlob(null);
         setPasswordOnFile(false);
@@ -63,7 +64,7 @@ function ShowPrivateKey() {
         return;
       }
       try {
-        const raw = await loadNamedWalletEncrypted(name);
+        const raw = await loadNamedWalletEncrypted(savedWalletName);
         const info = raw ? inspectWalletBlob(raw) : null;
         const block = info?.envelope?.passkey;
         if (!alive) return;
@@ -89,7 +90,7 @@ function ShowPrivateKey() {
     return () => {
       alive = false;
     };
-  }, [name]);
+  }, [savedWalletName]);
 
   useEffect(() => {
     if (!revealedKey) return;
@@ -139,6 +140,7 @@ function ShowPrivateKey() {
         pathType,
         password,
         name: name || "Account 0",
+        savedWalletName,
       });
     } finally {
       exported.privateKey = "";

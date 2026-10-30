@@ -31,3 +31,4 @@ build-firefox
 # release build artifact
 warthog_extension.zip
 warthog_extension_firefox.zip
+.native-host/

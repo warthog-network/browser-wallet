@@ -26,7 +26,7 @@ function assetsFor(chain: string): WalletToken[] {
 }
 
 export default function ChainSend() {
-  const { accounts, chain } = useChainAccounts();
+  const { accounts, chain, phrasePending, addressError } = useChainAccounts();
   const flow = useSpendFlow();
   const [assetId, setAssetId] = useState("");
   const [listed, setListed] = useState<WalletToken[] | null>(null);
@@ -74,8 +74,8 @@ export default function ChainSend() {
     return (
       <div className="container">
         <Header title="Send" />
-        <p className="text-sm text-white/70">
-          Choose Ethereum, Bitcoin, Hemi, or Solana on the home card. A private-key import stays on Warthog.
+        <p className="text-sm text-white/70" role={addressError ? "alert" : "status"}>
+          {phrasePending ? "Loading account addresses…" : addressError || "Choose Ethereum, Bitcoin, Hemi, or Solana on the home card. A private-key import stays on Warthog."}
         </p>
       </div>
     );

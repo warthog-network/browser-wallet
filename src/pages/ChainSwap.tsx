@@ -150,7 +150,7 @@ type Draft =
   | { kind: "eth"; direction: "deposit" | "withdraw"; amount: bigint; text: string };
 
 export default function ChainSwap({ chain }: { chain: Chain }) {
-  const { accounts } = useChainAccounts();
+  const { accounts, phrasePending, addressError } = useChainAccounts();
   const flow = useSpendFlow();
   const location = useLocation();
   const requested = (location.state as { mode?: string } | null)?.mode;
@@ -784,7 +784,7 @@ export default function ChainSwap({ chain }: { chain: Chain }) {
     return (
       <div className="container">
         <Header title="Swap" />
-        <p className="text-sm text-white/70">These networks need the recovery phrase. A private-key import stays on Warthog.</p>
+        <p className="text-sm text-white/70" role={addressError ? "alert" : "status"}>{phrasePending ? "Loading account addresses…" : addressError || "These networks need the recovery phrase. A private-key import stays on Warthog."}</p>
       </div>
     );
   }

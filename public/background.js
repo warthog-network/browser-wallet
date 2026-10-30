@@ -657,9 +657,12 @@ class WarthogBackground {
         this.saveConnections();
         this.sendToTab(tabId, 'accountsChanged', result.accounts);
         this.sendResponse(tabId, requestId, { success: true, data: { accounts: result.accounts } });
+      } else {
+        this.sendResponse(tabId, requestId, { success: false, error: ERRORS.USER_REJECTED });
       }
     } catch (error) {
       console.error('Request accounts error:', error);
+      this.sendResponse(tabId, requestId, { success: false, error });
     }
   }
 
@@ -691,8 +694,8 @@ class WarthogBackground {
       } else {
         this.sendResponse(tabId, requestId, { success: false, error: ERRORS.USER_REJECTED });
       }
-    } catch {
-      this.sendResponse(tabId, requestId, { success: false, error: ERRORS.USER_REJECTED });
+    } catch (error) {
+      this.sendResponse(tabId, requestId, { success: false, error });
     }
   }
 
@@ -809,11 +812,12 @@ async handleOpenSendPage(payload, origin, tabId, requestId) {
 
 requestApproval(data) {
     return new Promise((resolve, reject) => {
-      this.pendingRequest = {
+      const pendingRequest = {
         ...data,
         resolve,
         reject,
       };
+      this.pendingRequest = pendingRequest;
 
       this.pendingApprovalParams = {
         action: data.action,
@@ -830,12 +834,17 @@ requestApproval(data) {
       this.focusOrCreatePopup(popupUrl)
         .then((win) => {
           this.approvalWindowId = win?.id || null;
-          if (data.tabId !== undefined) {
-            browser.tabs.sendMessage(data.tabId, { type: 'WARTHOG_PROVIDER_RESPONSE', requestId: data.requestId, success: true, data: { pending: true, message: 'Popup opened' } });
-          }
+          // Opening the window is progress, not the result of the request.
+          // The provider settles on its first response, so only the approval
+          // handlers above send the final accounts, transaction hash, or error.
         })
         .catch((error) => {
           console.error('Failed to open approval window:', error);
+          if (this.pendingRequest === pendingRequest) {
+            this.pendingRequest = null;
+            this.pendingApprovalParams = null;
+            browser.storage.local.remove('pendingApproval');
+          }
           reject(ERRORS.INTERNAL_ERROR);
         });
     });
