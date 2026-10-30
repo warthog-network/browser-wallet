@@ -9,6 +9,7 @@ STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 
 mkdir -p "$STAGE/Warthog_IPv4_forwarder-windows/scripts" "$OUT"
+OUT=$(CDPATH= cd -- "$OUT" && pwd)
 "$CC" -O2 -s -municode -mwindows -o "$STAGE/Warthog_IPv4_forwarder-windows/Warthog_IPv4_forwarder.exe" "$ROOT/scripts/safetrade-winhost.c"
 cp "$ROOT/scripts/safetrade-native-host.py" "$ROOT/scripts/install-safetrade-host.py" "$STAGE/Warthog_IPv4_forwarder-windows/scripts/"
 
