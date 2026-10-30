@@ -31,6 +31,8 @@ HERE=$(dirname "$(readlink -f "$0")")
 exec python3 "$HERE/scripts/safetrade-forwarder-gui.py"
 EOF
 chmod +x "$APPDIR/AppRun"
+# mktemp is private to this user. Current appimagetool rejects that.
+chmod -R a+rX "$APPDIR"
 
 TOOL=${APPIMAGETOOL:-/tmp/appimagetool-x86_64.AppImage}
 if [ ! -x "$TOOL" ]; then
@@ -38,5 +40,7 @@ if [ ! -x "$TOOL" ]; then
   chmod +x "$TOOL"
 fi
 
-( cd "$OUT" && ARCH=x86_64 "$TOOL" --appimage-extract-and-run "$APPDIR" )
-echo "$OUT/Warthog_IPv4_forwarder-x86_64.AppImage"
+IMAGE="$OUT/Warthog_IPv4_forwarder-x86_64.AppImage"
+# VERSION in the environment would change the file name. The release looks for this one.
+env -u VERSION ARCH=x86_64 "$TOOL" --appimage-extract-and-run "$APPDIR" "$IMAGE"
+echo "$IMAGE"
