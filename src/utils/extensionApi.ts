@@ -1,6 +1,7 @@
 import browser from 'webextension-polyfill';
 
 export interface PendingApproval {
+  approvalId: string;
   action: string;
   origin: string;
   to?: string;
@@ -21,27 +22,35 @@ export async function getPendingApproval(): Promise<PendingApproval | null> {
   }
 }
 
-export async function approveRequest(accounts?: string[], txHash?: string): Promise<boolean> {
+export async function approveRequest(approvalId: string, accounts?: string[], txHash?: string): Promise<boolean> {
   try {
-    await browser.runtime.sendMessage({
+    const response = await browser.runtime.sendMessage({
       action: 'approveRequest',
-      payload: { accounts, txHash },
-    });
-    await browser.storage.local.remove('pendingApproval');
-    return true;
+      payload: { approvalId, accounts, txHash },
+    }) as { success?: boolean };
+    return response?.success === true;
   } catch (error) {
     console.error('Error approving request:', error);
     return false;
   }
 }
 
-export async function rejectRequest(): Promise<boolean> {
+export async function rejectRequest(approvalId: string): Promise<boolean> {
   try {
-    await browser.runtime.sendMessage({ action: 'rejectRequest' });
-    await browser.storage.local.remove('pendingApproval');
-    return true;
+    const response = await browser.runtime.sendMessage({ action: 'rejectRequest', payload: { approvalId } }) as { success?: boolean };
+    return response?.success === true;
   } catch (error) {
     console.error('Error rejecting request:', error);
+    return false;
+  }
+}
+
+export async function deferApproval(approvalId: string): Promise<boolean> {
+  try {
+    const response = await browser.runtime.sendMessage({ action: 'deferApproval', payload: { approvalId } }) as { success?: boolean };
+    return response?.success === true;
+  } catch (error) {
+    console.error('Error deferring request:', error);
     return false;
   }
 }

@@ -103,10 +103,12 @@ function LedgerHost() {
       );
       await clearLedgerSignJob();
       await saveLedgerLastTx(hash);
-      if (job.approveDapp) {
-        await approveRequest(undefined, hash);
-      }
       setTxHash(hash);
+      if (job.approveDapp) {
+        if (!job.approvalId || !await approveRequest(job.approvalId, undefined, hash)) {
+          throw new Error("Transaction broadcast, but the site did not receive its result. Check activity before retrying.");
+        }
+      }
       await finishLedgerDeviceStep(() => navigate("/home", { replace: true }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ledger sign failed");
