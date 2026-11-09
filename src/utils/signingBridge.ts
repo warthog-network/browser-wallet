@@ -175,6 +175,9 @@ export async function signWarthogInWorker(
   request: WarthogSignRequest,
   expectedAddress?: string,
 ): Promise<TransactionJson | LegacyTransactionJson> {
+  // Always name the account on screen. The worker refuses to sign with a key
+  // whose address differs, so a send can never go out from another account.
+  if (!expectedAddress?.trim()) throw new Error("No account selected");
   const status = await getSigningStatus();
   if (!status.unlocked) throw new Error("Wallet is locked — unlock to sign");
   const result = await callWorker("signWarthog", {

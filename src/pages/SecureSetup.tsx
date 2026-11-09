@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import useWallet from "../hooks/useWallet";
-import { isFirefoxBrowser } from "../utils/browserName";
 import { isWebAuthnAvailable } from "../utils/passkeyWallet";
 import { isPasskeyHandedOff } from "../utils/passkeyHandoff";
 import { clearPasskeyWaiting, paintPasskeyWaiting } from "../utils/passkeyUi";
@@ -53,13 +52,10 @@ function SecureSetup() {
   const [awaitingPasskey, setAwaitingPasskey] = useState(false);
   const [backupPrivateKey, setBackupPrivateKey] = useState<string | null>(null);
 
-  const preferPasskey = !isFirefoxBrowser();
-
+  // Passkey stays opt-in. A password alone is enough to save and unlock.
   useEffect(() => {
-    const ok = isWebAuthnAvailable();
-    setPasskeysSupported(ok);
-    if (ok && preferPasskey) setEnablePasskey(true);
-  }, [preferPasskey]);
+    setPasskeysSupported(isWebAuthnAvailable());
+  }, []);
 
   useEffect(() => {
     if (!wallet && !signingUnlocked) {
@@ -313,8 +309,7 @@ function SecureSetup() {
                   }}
                 />
                 <span className="text-white text-sm">
-                  Enable passkey unlock
-                  {preferPasskey ? " · preferred" : ""}
+                  Enable passkey unlock (optional)
                 </span>
               </label>
               <p className="text-white/40 text-[11px] leading-relaxed -mt-1 pl-6">

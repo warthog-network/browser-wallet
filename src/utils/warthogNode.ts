@@ -63,6 +63,15 @@ async function nodeGet<T = unknown>(
   return json.data as T;
 }
 
+/**
+ * A fresh account has no row on the node yet. History answers "Not found",
+ * and the DeFi node answers "Address not found" for mempool and open orders.
+ */
+export function isEmptyAccountError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /^(address )?not found$/.test(message.trim().toLowerCase());
+}
+
 
 /** Mainnet returns flat pin fields; DeFi may nest under chainHead */
 function normalizeChainPin(data: Record<string, unknown>): {
@@ -596,10 +605,23 @@ export async function fetchAccountHistory(
     console.warn("[history] indexer path failed, falling back to node", err);
   }
 
-  const data = await nodeGet<Record<string, unknown>>(
-    nodeBase,
-    `account/${address}/history/${beforeTxIndex}`,
-  );
+  let data: Record<string, unknown>;
+  try {
+    data = await nodeGet<Record<string, unknown>>(
+      nodeBase,
+      `account/${address}/history/${beforeTxIndex}`,
+    );
+  } catch (error) {
+    if (isEmptyAccountError(error)) {
+      return {
+        items: [],
+        hasMore: false,
+        fromId: null,
+        source: "node",
+      };
+    }
+    throw error;
+  }
 
   const flat = flattenHistoryPage(data || {});
   const items = flat.map((tx) => {

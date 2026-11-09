@@ -88,6 +88,41 @@ function stripCrossorigin(): Plugin {
   };
 }
 
+/**
+ * warthog-ts (and bip39) call the Node global `Buffer` and do not import it.
+ * Assigning `window.Buffer` from the page entry does not define that name
+ * inside an ES module, so a send throws "Buffer is not defined".
+ * Give each of those modules the polyfill in src/polyfills/buffer.ts.
+ * That file is `buffer` 5.7.1 plus `writeBigUInt64BE`, which the package lacks
+ * and which warthog-ts uses for fee and amount. Skip files that already
+ * bind the name.
+ */
+function provideBuffer(): Plugin {
+  let polyfill = resolve(process.cwd(), "src/polyfills/buffer.ts");
+  return {
+    name: "provide-buffer",
+    enforce: "pre",
+    configResolved(config) {
+      polyfill = resolve(config.root, "src/polyfills/buffer.ts");
+    },
+    transform(code, id) {
+      const file = id.split("?")[0];
+      if (!/\.(?:[cm]?js|tsx?|jsx)$/.test(file)) return null;
+      if (file.includes("/node_modules/buffer/")) return null;
+      if (file.endsWith("/src/polyfills/buffer.ts")) return null;
+      if (!/\bBuffer\b/.test(code)) return null;
+      if (/from\s+["']buffer["']/.test(code)) return null;
+      if (/require\(\s*["']buffer["']\s*\)/.test(code)) return null;
+      if (/import\s*\{[^}]*\bBuffer\b/.test(code)) return null;
+      if (/\b(?:function|class|var|let|const)\s+Buffer\b/.test(code)) return null;
+      return {
+        code: `import { Buffer } from ${JSON.stringify(polyfill)};\n${code}`,
+        map: null,
+      };
+    },
+  };
+}
+
 function bundleBackground(): Plugin {
   let root = process.cwd();
   let outDir = "build";
@@ -120,6 +155,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
+      provideBuffer(),
       react(),
       stripCrossorigin(),
       bundleBackground(),
@@ -133,6 +169,10 @@ export default defineConfig(({ mode }) => {
       }),
       writeManifest(target),
     ],
+    worker: {
+      // The signing worker is its own bundle. It needs the Buffer polyfill too.
+      plugins: () => [provideBuffer()],
+    },
     optimizeDeps: {
       include: ["ethers"],
       // warthog-ts is consumed as ESM; pre-bundling it breaks its

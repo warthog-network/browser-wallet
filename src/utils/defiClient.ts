@@ -16,7 +16,7 @@ import {
 } from "warthog-ts";
 import { DEFAULT_TX_FEE } from "../config/network";
 import { normalizeNodeUrl } from "./nodes";
-import { nodeRead } from "./warthogNode";
+import { isEmptyAccountError, nodeRead } from "./warthogNode";
 import { formatAmountFromRaw, formatBalanceBreakdown } from "./balanceBreakdown";
 import { signPreparedWarthog, type WarthogSignOp } from "./signingBridge";
 import { ensureHostPermission, hostPermissionError, privilegedFetch } from "./hostAccess";
@@ -317,7 +317,13 @@ export async function getOpenOrders(
   address: string,
 ): Promise<OpenOrdersByAsset[]> {
   // GET /account/:account/open_orders
-  const data = await nodeRead<unknown[]>(nodeBase, `account/${address}/open_orders`);
+  let data: unknown[];
+  try {
+    data = await nodeRead<unknown[]>(nodeBase, `account/${address}/open_orders`);
+  } catch (error) {
+    if (isEmptyAccountError(error)) return [];
+    throw error;
+  }
   if (!Array.isArray(data)) return [];
   return data as OpenOrdersByAsset[];
 }
