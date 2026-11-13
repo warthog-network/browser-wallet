@@ -5,6 +5,7 @@ const ERRORS = {
   UNAUTHORIZED: { code: 4100, message: 'Unauthorized - please connect first' },
   CHAIN_NOT_FOUND: { code: 4900, message: 'Chain not found' },
   INTERNAL_ERROR: { code: -32603, message: 'Internal error' },
+  REQUEST_PENDING: { code: -32002, message: 'Another wallet approval is pending' },
   METHOD_NOT_FOUND: { code: -32601, message: 'Method not found' },
 };
 
@@ -144,14 +145,14 @@ class WarthogBackground {
       if (windowId === this.approvalWindowId) {
         console.log('Popup window closed, clearing approvalWindowId');
         this.approvalWindowId = null;
-        if (this.pendingRequest) {
+        if (this.pendingRequest && !this.pendingRequest.deferred) {
           console.log('Clearing pendingRequest due to popup close');
           if (this.pendingRequest.reject) {
             this.pendingRequest.reject(ERRORS.USER_REJECTED);
           }
           this.pendingRequest = null;
         }
-        browser.storage.local.remove('pendingApproval');
+        if (!this.pendingRequest?.deferred) browser.storage.local.remove('pendingApproval');
       }
     });
   }
@@ -180,7 +181,7 @@ class WarthogBackground {
           const siteOrigin = message.origin;
           this.connections.delete(siteOrigin);
           if (this.pendingRequest?.origin === siteOrigin) {
-            this.handleRejectRequest();
+            this.handleRejectRequest({ approvalId: this.pendingRequest.approvalId });
             await browser.storage.local.remove('pendingApproval');
           }
           await browser.storage.local.set({ connections: JSON.stringify(Object.fromEntries(this.connections)) });
@@ -194,8 +195,7 @@ class WarthogBackground {
 
       if (message.action === 'approvalResult') {
         console.log('handling approvalResult:', message.payload);
-        this.handleApprovalResult(message.payload);
-        sendResponse({ success: true });
+        sendResponse({ success: this.handleApprovalResult(message.payload) });
         return;
       }
 
@@ -208,15 +208,18 @@ class WarthogBackground {
 
       if (message.action === 'approveRequest') {
         console.log('handling approveRequest');
-        this.handleApproveRequest(message.payload);
-        sendResponse({ success: true });
+        sendResponse({ success: this.handleApproveRequest(message.payload) });
         return;
       }
 
       if (message.action === 'rejectRequest') {
         console.log('handling rejectRequest');
-        this.handleRejectRequest();
-        sendResponse({ success: true });
+        sendResponse({ success: this.handleRejectRequest(message.payload) });
+        return;
+      }
+
+      if (message.action === 'deferApproval') {
+        sendResponse({ success: this.deferApproval(message.payload) });
         return;
       }
 
@@ -259,6 +262,7 @@ class WarthogBackground {
       || action === 'getPendingApproval'
       || action === 'approveRequest'
       || action === 'rejectRequest'
+      || action === 'deferApproval'
       || action === 'reopenToolbarPopup'
       || action === 'showToolbarDropdown';
   }
@@ -635,9 +639,8 @@ class WarthogBackground {
 
   async handleRequestAccounts(origin, tabId, requestId) {
     console.log('handleRequestAccounts called', { origin, tabId, requestId });
-    if (this.pendingRequest && this.pendingRequest.origin === origin) {
-      console.log('Duplicate request from same origin, rejecting');
-      this.sendResponse(tabId, requestId, { success: false, error: ERRORS.USER_REJECTED });
+    if (this.pendingRequest) {
+      this.sendResponse(tabId, requestId, { success: false, error: ERRORS.REQUEST_PENDING });
       return;
     }
     try {
@@ -667,9 +670,8 @@ class WarthogBackground {
   }
 
   async handleSendTransaction(payload, origin, tabId, requestId) {
-    if (this.pendingRequest && this.pendingRequest.origin === origin) {
-      console.log('Duplicate transaction request from same origin, rejecting');
-      this.sendResponse(tabId, requestId, { success: false, error: ERRORS.USER_REJECTED });
+    if (this.pendingRequest) {
+      this.sendResponse(tabId, requestId, { success: false, error: ERRORS.REQUEST_PENDING });
       return;
     }
     const connection = this.connections.get(origin);
@@ -701,6 +703,10 @@ class WarthogBackground {
 
 async handleOpenSendPage(payload, origin, tabId, requestId) {
     console.log('handleOpenSendPage called', { origin, tabId, payload });
+    if (this.pendingRequest) {
+      this.sendResponse(tabId, requestId, { success: false, error: ERRORS.REQUEST_PENDING });
+      return;
+    }
 
     this.pendingApprovalParams = {
       action: 'sendTo',
@@ -758,68 +764,60 @@ async handleOpenSendPage(payload, origin, tabId, requestId) {
 
   handleApproveRequest(payload) {
     console.log('handleApproveRequest called', payload);
-    if (this.pendingRequest && this.pendingRequest.resolve) {
-      const { accounts } = payload;
-      if (this.pendingRequest.action === 'requestAccounts' && accounts) {
-        this.pendingRequest.resolve({ accounts });
-      } else if (payload.txHash) {
-        this.pendingRequest.resolve({ txHash: payload.txHash });
-      } else {
-        this.pendingRequest.resolve({ accounts: [] });
-      }
+    if (!this.pendingRequest || this.pendingRequest.approvalId !== payload?.approvalId) return false;
+    if (this.pendingRequest.action === 'requestAccounts') {
+      if (!Array.isArray(payload.accounts)) return false;
+      this.pendingRequest.resolve({ accounts: payload.accounts });
+    } else {
+      if (typeof payload.txHash !== 'string' || !payload.txHash) return false;
+      this.pendingRequest.resolve({ txHash: payload.txHash });
     }
+    this.finishApproval();
+    return true;
+  }
+
+  handleRejectRequest(payload) {
+    console.log('handleRejectRequest called');
+    if (!this.pendingRequest || this.pendingRequest.approvalId !== payload?.approvalId) return false;
+    this.pendingRequest.reject(ERRORS.USER_REJECTED);
+    this.finishApproval();
+    return true;
+  }
+
+  deferApproval(payload) {
+    if (!this.pendingRequest || this.pendingRequest.approvalId !== payload?.approvalId) return false;
+    this.pendingRequest.deferred = true;
+    return true;
+  }
+
+  finishApproval() {
     this.pendingRequest = null;
     this.pendingApprovalParams = null;
     browser.storage.local.remove('pendingApproval');
-  }
-
-  handleRejectRequest() {
-    console.log('handleRejectRequest called');
-    if (this.pendingRequest && this.pendingRequest.reject) {
-      this.pendingRequest.reject(ERRORS.USER_REJECTED);
-    }
-    this.pendingRequest = null;
-    this.pendingApprovalParams = null;
+    const windowId = this.approvalWindowId;
+    this.approvalWindowId = null;
+    if (windowId != null) browser.windows.remove(windowId).catch(() => {});
   }
 
   handleApprovalResult(payload) {
     console.log('handleApprovalResult called', payload);
-    console.log('pendingRequest was', this.pendingRequest);
-    if (!this.pendingRequest) return;
-
-    const { approved, txHash, accounts } = payload;
-
-    if (this.pendingRequest.resolve) {
-      if (approved) {
-        if (this.pendingRequest.action === 'requestAccounts' && accounts) {
-          this.pendingRequest.resolve({ accounts });
-        } else if (txHash) {
-          this.pendingRequest.resolve({ txHash });
-        } else {
-          this.pendingRequest.resolve({ accounts: [] });
-        }
-      } else {
-        this.pendingRequest.reject(ERRORS.USER_REJECTED);
-      }
-    }
-
-    this.pendingRequest = null;
-    if (this.approvalWindowId) {
-      browser.windows.remove(this.approvalWindowId).catch(() => {});
-      this.approvalWindowId = null;
-    }
+    return payload?.approved ? this.handleApproveRequest(payload) : this.handleRejectRequest(payload);
   }
 
 requestApproval(data) {
+    if (this.pendingRequest) return Promise.reject(ERRORS.REQUEST_PENDING);
     return new Promise((resolve, reject) => {
+      const approvalId = crypto.randomUUID();
       const pendingRequest = {
         ...data,
+        approvalId,
         resolve,
         reject,
       };
       this.pendingRequest = pendingRequest;
 
       this.pendingApprovalParams = {
+        approvalId,
         action: data.action,
         origin: data.origin,
         to: data.to,

@@ -66,12 +66,13 @@ describe("connected-site administration", () => {
     const sender = { url: "https://app.example/", tab: { id: 1 } };
     expect(await app.send({ action: "approveRequest", payload: { txHash: "fake" } }, sender)).toEqual({ error: "Unauthorized" });
     expect(await app.send({ action: "rejectRequest" }, sender)).toEqual({ error: "Unauthorized" });
+    expect(await app.send({ action: "deferApproval" }, sender)).toEqual({ error: "Unauthorized" });
     expect(await app.send({ action: "approvalResult", payload: { txHash: "fake" } }, sender)).toEqual({ error: "Unauthorized" });
     expect(await app.send({ action: "getPendingApproval" }, sender)).toEqual({ error: "Unauthorized" });
     expect(await app.send({ action: "showToolbarDropdown" }, sender)).toEqual({ error: "Unauthorized" });
   });
   test("an extension page can still reject a request", async () => {
     const app = background();
-    expect(await app.send({ action: "rejectRequest" })).toEqual({ success: true });
+    expect(await app.send({ action: "rejectRequest" })).toEqual({ success: false });
   });
 });

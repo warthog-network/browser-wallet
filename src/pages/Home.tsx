@@ -26,11 +26,11 @@ import { hasPositiveLocked } from "../utils/balanceBreakdown";
 import { formatDisplayNumber, loadNumberDisplayPrefs } from "../utils/numberDisplay";
 import { FaSync } from "react-icons/fa";
 import SenderSummary from "../components/SenderSummary";
-import { getPendingApproval, approveRequest, rejectRequest, PendingApproval } from "../utils/extensionApi";
+import { getPendingApproval, approveRequest, deferApproval, rejectRequest, PendingApproval } from "../utils/extensionApi";
 import { createTransactionContext, formatAddress, submitTransaction } from "../utils";
 import { Address, NonceId, RoundedFee, Wart } from "warthog-ts";
 import { ledgerWartSubmitJson, signWartTransferOnLedger } from "../ledger/warthogApp";
-import { readLedgerWindowMode, storeLedgerSignJob, takeLedgerLastTx, type LedgerWindowMode } from "../ledger/session";
+import { clearLedgerSignJob, readLedgerWindowMode, storeLedgerSignJob, takeLedgerLastTx, type LedgerWindowMode } from "../ledger/session";
 import { isToolbarActionPopup, openLedgerHost, openLedgerInSidePanel } from "../ledger/shell";
 import { reloadDocumentOnce } from "../utils/extensionNav";
 import { DEFAULT_TX_FEE } from "../config/network";
@@ -361,13 +361,15 @@ const Home: React.FC<{ view?: "wallet" | "activity" }> = ({ view = "wallet" }) =
     }
     if (pendingApproval?.action === 'requestAccounts') {
       if (!wallet) return;
-      await approveRequest([wallet]);
+      if (!await approveRequest(pendingApproval.approvalId, [wallet])) {
+        setLedgerNote("This approval expired. Ask the site to retry.");
+        return;
+      }
       setShowApprovalBanner(false);
       setPendingApproval(null);
       return;
     }
     if (pendingApproval?.action === 'openSendPage') {
-      await approveRequest();
       setShowApprovalBanner(false);
       setPendingApproval(null);
       navigate(`/send?address=${pendingApproval.to}`);
@@ -379,6 +381,7 @@ const Home: React.FC<{ view?: "wallet" | "activity" }> = ({ view = "wallet" }) =
     ) {
       setApprovalBusy(true);
       setLedgerNote(null);
+      let handoffJobStored = false;
       try {
         const toAddr = Address.fromHex(pendingApproval.to || "");
         if (!toAddr) throw new Error("Invalid recipient address");
@@ -405,8 +408,13 @@ const Home: React.FC<{ view?: "wallet" | "activity" }> = ({ view = "wallet" }) =
             amountE8: wartParsed.E8.toString(),
             nodeIndex: selectedNodeIndex,
             approveDapp: true,
+            approvalId: pendingApproval.approvalId,
           });
+          handoffJobStored = true;
           if (!opened) await openLedgerHost("op=sign");
+          if (!await deferApproval(pendingApproval.approvalId)) {
+            throw new Error("This approval expired. Ask the site to retry.");
+          }
           window.close();
           return;
         }
@@ -423,11 +431,14 @@ const Home: React.FC<{ view?: "wallet" | "activity" }> = ({ view = "wallet" }) =
           selectedNodeIndex,
           ledgerWartSubmitJson(tx, nodeList[selectedNodeIndex]),
         );
-        await approveRequest(undefined, txHash);
+        if (!await approveRequest(pendingApproval.approvalId, undefined, txHash)) {
+          throw new Error("Transaction broadcast, but the site did not receive its result. Check activity before retrying.");
+        }
         setShowApprovalBanner(false);
         setPendingApproval(null);
         setLedgerNote(`Broadcast ${txHash}`);
       } catch (error) {
+        if (handoffJobStored) await clearLedgerSignJob();
         setLedgerNote(error instanceof Error ? error.message : "Ledger sign failed");
       } finally {
         setApprovalBusy(false);
@@ -450,7 +461,9 @@ const Home: React.FC<{ view?: "wallet" | "activity" }> = ({ view = "wallet" }) =
           amountE8: amount.E8.toString(),
         }, wallet);
         const hash = await submitTransaction(nodeList, selectedNodeIndex, transaction);
-        await approveRequest(undefined, hash);
+        if (!await approveRequest(pendingApproval.approvalId, undefined, hash)) {
+          throw new Error("Transaction broadcast, but the site did not receive its result. Check activity before retrying.");
+        }
         setShowApprovalBanner(false);
         setPendingApproval(null);
       } catch (error) {
@@ -460,7 +473,10 @@ const Home: React.FC<{ view?: "wallet" | "activity" }> = ({ view = "wallet" }) =
   };
 
   const handleReject = async () => {
-    await rejectRequest();
+    if (!pendingApproval || !await rejectRequest(pendingApproval.approvalId)) {
+      setLedgerNote("This approval expired. Ask the site to retry.");
+      return;
+    }
     setShowApprovalBanner(false);
     setPendingApproval(null);
   };

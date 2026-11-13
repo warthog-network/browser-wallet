@@ -41,6 +41,7 @@ export type LedgerSignJob = {
   nodeIndex: number;
   /** Home handed this send off so the device tab can finish the dApp approval. */
   approveDapp?: boolean;
+  approvalId?: string;
 };
 
 type SessionArea = {
