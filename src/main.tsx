@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router-dom";
-import { Buffer } from "buffer";
+import { Buffer } from "./polyfills/buffer";
 import "./index.css";
 import "./styles/defi.css";
 import "./styles/wallet-layout.css";
@@ -29,7 +29,7 @@ warmDockWindow();
 // Already logged-in compact shell (file-login success) OR real popup OR full helper tab
 applyExtensionShellClass(isCompactShellPreferred());
 
-window.Buffer = window.Buffer || Buffer;
+globalThis.Buffer = globalThis.Buffer || Buffer;
 applyNumberDisplayTheme();
 
 // The error boundary sits outside everything. Without it a throw during
